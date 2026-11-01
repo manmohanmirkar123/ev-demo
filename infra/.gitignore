@@ -1,0 +1,34 @@
+# Provider plugins and modules downloaded by `terraform init`
+.terraform/
+
+# State: holds the IoT device private key and resource IDs. Never commit it.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Variable files often hold account-specific values or secrets (e.g. alert_email)
+*.tfvars
+*.tfvars.json
+
+# Local overrides
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Saved plans (`terraform plan -out=...`)
+*.tfplan
+tfplan
+
+# CLI config
+.terraformrc
+terraform.rc
+
+# Lambda zips built by archive_file
+.build/
+
+# .terraform.lock.hcl IS committed: it pins provider versions so every deploy uses the same ones.

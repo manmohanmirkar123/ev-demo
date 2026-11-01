@@ -1,0 +1,7 @@
+boto3>=1.34
+paho-mqtt>=2.0
+streamlit>=1.37
+pandas>=2.1
+pytest>=8.0
+xgboost>=2.0
+numpy>=1.26

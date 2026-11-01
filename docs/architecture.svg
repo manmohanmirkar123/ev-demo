@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="730" viewBox="0 0 1280 730" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#455A64"/>
+    </marker>
+    <style>
+      .title { font-size: 14px; font-weight: 600; fill: #1a1a1a; }
+      .sub { font-size: 11.5px; fill: #455A64; }
+      .cmd { font-size: 11px; fill: #37474F; font-family: Menlo, Consolas, monospace; }
+      .lbl { font-size: 11px; fill: #37474F; }
+      .zone { font-size: 13px; font-weight: 700; fill: #37474F; letter-spacing: 0.5px; }
+      .wire { stroke: #455A64; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .wire-dash { stroke: #455A64; stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; marker-end: url(#arrow); }
+      .laptop { fill: #F5F5F5; stroke: #757575; }
+      .iot { fill: #E8F5E9; stroke: #2E7D32; }
+      .compute { fill: #FFF3E0; stroke: #E65100; }
+      .db { fill: #E3F2FD; stroke: #1565C0; }
+      .lake { fill: #F3E5F5; stroke: #6A1B9A; }
+      .notify { fill: #FCE4EC; stroke: #AD1457; }
+      .ml { fill: #E0F2F1; stroke: #00695C; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="730" fill="#FFFFFF"/>
+  <text x="640" y="32" text-anchor="middle" style="font-size:18px;font-weight:700;fill:#1a1a1a">EV predictive maintenance — architecture</text>
+
+  <!-- zones -->
+  <text x="105" y="92" text-anchor="middle" class="zone">YOUR LAPTOP</text>
+  <text x="1167" y="92" text-anchor="middle" class="zone">YOUR LAPTOP</text>
+  <rect x="215" y="60" width="830" height="470" rx="14" fill="none" stroke="#FF9900" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="232" y="84" class="zone" style="fill:#B26A00">FLEET AWS ACCOUNT</text>
+
+  <!-- laptop: simulator + dashboard -->
+  <rect x="20" y="110" width="170" height="80" rx="10" class="laptop" stroke-width="1.5"/>
+  <text x="105" y="140" text-anchor="middle" class="title">Fleet simulator</text>
+  <text x="105" y="158" text-anchor="middle" class="sub">20 EVs · 120 days</text>
+  <text x="105" y="176" text-anchor="middle" class="cmd">make simulate</text>
+
+  <rect x="1075" y="110" width="185" height="80" rx="10" class="laptop" stroke-width="1.5"/>
+  <text x="1167" y="140" text-anchor="middle" class="title">Dashboard</text>
+  <text x="1167" y="158" text-anchor="middle" class="sub">Streamlit · live</text>
+  <text x="1167" y="176" text-anchor="middle" class="cmd">make dashboard</text>
+
+  <!-- row 1: ingest + score -->
+  <rect x="240" y="110" width="170" height="70" rx="10" class="iot" stroke-width="1.5"/>
+  <text x="325" y="140" text-anchor="middle" class="title">AWS IoT Core</text>
+  <text x="325" y="160" text-anchor="middle" class="sub">MQTT over TLS · X.509</text>
+
+  <rect x="450" y="110" width="180" height="70" rx="10" class="compute" stroke-width="1.5"/>
+  <text x="540" y="137" text-anchor="middle" class="title">Lambda scorer</text>
+  <text x="540" y="155" text-anchor="middle" class="sub">anomaly gate +</text>
+  <text x="540" y="170" text-anchor="middle" class="sub">days-to-limit</text>
+
+  <rect x="670" y="110" width="170" height="70" rx="10" class="db" stroke-width="1.5"/>
+  <text x="755" y="140" text-anchor="middle" class="title">DynamoDB</text>
+  <text x="755" y="160" text-anchor="middle" class="sub">component health</text>
+
+  <!-- row 2: act -->
+  <rect x="450" y="250" width="180" height="70" rx="10" class="compute" stroke-width="1.5"/>
+  <text x="540" y="280" text-anchor="middle" class="title">EventBridge</text>
+  <text x="540" y="300" text-anchor="middle" class="sub">ComponentAtRisk rule</text>
+
+  <rect x="670" y="250" width="170" height="70" rx="10" class="compute" stroke-width="1.5"/>
+  <text x="755" y="277" text-anchor="middle" class="title">Step Functions</text>
+  <text x="755" y="295" text-anchor="middle" class="sub">prioritise → work order</text>
+  <text x="755" y="310" text-anchor="middle" class="sub">→ notify</text>
+
+  <rect x="870" y="225" width="155" height="55" rx="10" class="db" stroke-width="1.5"/>
+  <text x="947" y="249" text-anchor="middle" class="title">DynamoDB</text>
+  <text x="947" y="267" text-anchor="middle" class="sub">work orders</text>
+
+  <rect x="870" y="292" width="155" height="55" rx="10" class="notify" stroke-width="1.5"/>
+  <text x="947" y="316" text-anchor="middle" class="title">SNS</text>
+  <text x="947" y="334" text-anchor="middle" class="sub">email alert</text>
+
+  <!-- row 3: data lake -->
+  <rect x="240" y="420" width="170" height="70" rx="10" class="lake" stroke-width="1.5"/>
+  <text x="325" y="450" text-anchor="middle" class="title">Kinesis Firehose</text>
+  <text x="325" y="470" text-anchor="middle" class="sub">batches raw messages</text>
+
+  <rect x="450" y="420" width="180" height="70" rx="10" class="lake" stroke-width="1.5"/>
+  <text x="540" y="447" text-anchor="middle" class="title">S3 data lake</text>
+  <text x="540" y="465" text-anchor="middle" class="sub">telemetry/ · baseline/</text>
+  <text x="540" y="480" text-anchor="middle" class="sub">model/</text>
+
+  <rect x="670" y="420" width="170" height="70" rx="10" class="lake" stroke-width="1.5"/>
+  <text x="755" y="447" text-anchor="middle" class="title">Glue + Athena</text>
+  <text x="755" y="465" text-anchor="middle" class="sub">SQL over the lake</text>
+  <text x="755" y="480" text-anchor="middle" class="cmd">make baseline</text>
+
+  <!-- wires: real-time path -->
+  <path d="M190,150 H240" class="wire"/>
+
+  <path d="M410,145 H450" class="wire"/>
+  <text x="430" y="137" text-anchor="middle" class="lbl">rule</text>
+
+  <path d="M630,145 H670" class="wire"/>
+  <path d="M840,145 H1075" class="wire"/>
+  <text x="957" y="137" text-anchor="middle" class="lbl">read every 3 s</text>
+
+  <!-- wires: act -->
+  <path d="M540,180 V250" class="wire"/>
+  <text x="548" y="220" class="lbl">risk event</text>
+  <path d="M630,285 H670" class="wire"/>
+  <path d="M840,275 H855 V252 H870" class="wire"/>
+  <path d="M840,295 H855 V319 H870" class="wire"/>
+
+  <!-- wires: data lake -->
+  <path d="M270,180 V420" class="wire"/>
+  <text x="278" y="405" class="lbl">rule</text>
+  <path d="M410,465 H450" class="wire"/>
+  <path d="M630,455 H670" class="wire"/>
+
+  <!-- S3 artifacts back into the scorer -->
+  <path d="M450,432 H430 V172 H450" class="wire-dash"/>
+  <text x="422" y="280" text-anchor="end" class="lbl">loads</text>
+  <text x="422" y="295" text-anchor="end" class="lbl">baseline.json</text>
+  <text x="422" y="310" text-anchor="end" class="lbl">+ model.json</text>
+  <text x="422" y="325" text-anchor="end" class="lbl">every 5 min</text>
+
+  <!-- model training options -->
+  <text x="642" y="715" text-anchor="middle" class="zone">MODEL TRAINING — OPTIONAL, PICK ONE  ·  no model = mode A (linear trend)</text>
+  <rect x="240" y="595" width="250" height="90" rx="10" class="laptop" stroke-width="1.5"/>
+  <text x="365" y="622" text-anchor="middle" class="title">B · Local training</text>
+  <text x="365" y="641" text-anchor="middle" class="sub">XGBoost on your laptop, ~1 s</text>
+  <text x="365" y="668" text-anchor="middle" class="cmd">make train-local</text>
+
+  <rect x="515" y="595" width="250" height="90" rx="10" class="ml" stroke-width="1.5"/>
+  <text x="640" y="622" text-anchor="middle" class="title">C · SageMaker training job</text>
+  <text x="640" y="641" text-anchor="middle" class="sub">in the fleet account</text>
+  <text x="640" y="668" text-anchor="middle" class="cmd">make deploy SAGEMAKER=1; make train</text>
+
+  <rect x="790" y="595" width="255" height="90" rx="10" class="ml" stroke-width="1.5"/>
+  <text x="917" y="622" text-anchor="middle" class="title">D · SageMaker, other account</text>
+  <text x="917" y="641" text-anchor="middle" class="sub">CLI keys or CloudShell / Studio</text>
+  <text x="917" y="668" text-anchor="middle" class="cmd">make publish-model FROM=…</text>
+
+  <!-- bus from the three options into s3://lake/model/ -->
+  <path d="M365,595 V555 H917 V595" fill="none" stroke="#455A64" stroke-width="1.6"/>
+  <path d="M640,595 V555" fill="none" stroke="#455A64" stroke-width="1.6"/>
+  <path d="M560,555 V490" class="wire"/>
+  <text x="568" y="522" class="lbl">model.json → s3://…/model/</text>
+</svg>
