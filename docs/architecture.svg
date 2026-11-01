@@ -22,7 +22,7 @@
   </defs>
 
   <rect width="1280" height="730" fill="#FFFFFF"/>
-  <text x="640" y="32" text-anchor="middle" style="font-size:18px;font-weight:700;fill:#1a1a1a">EV predictive maintenance — architecture</text>
+  <text x="640" y="32" text-anchor="middle" style="font-size:18px;font-weight:700;fill:#1a1a1a">EV battery predictive maintenance — architecture</text>
 
   <!-- zones -->
   <text x="105" y="92" text-anchor="middle" class="zone">YOUR LAPTOP</text>
@@ -33,7 +33,7 @@
   <!-- laptop: simulator + dashboard -->
   <rect x="20" y="110" width="170" height="80" rx="10" class="laptop" stroke-width="1.5"/>
   <text x="105" y="140" text-anchor="middle" class="title">Fleet simulator</text>
-  <text x="105" y="158" text-anchor="middle" class="sub">20 EVs · 120 days</text>
+  <text x="105" y="158" text-anchor="middle" class="sub">20 EVs · BMS data · 120 days</text>
   <text x="105" y="176" text-anchor="middle" class="cmd">make simulate</text>
 
   <rect x="1075" y="110" width="185" height="80" rx="10" class="laptop" stroke-width="1.5"/>

@@ -21,8 +21,8 @@ from xgb_train import report, train  # noqa: E402
 
 DAYS = 120
 WINDOW = 30
-FAULT_COMPONENT = {"motor_bearing": "motor_bearing", "coolant_pump": "coolant_pump",
-                   "tyre_leak": "tyres", "aggressive_braking": "brake_pads"}
+FAULT_COMPONENT = {"weak_cell": "cell_imbalance", "cooling_plate": "pack_cooling",
+                   "moisture_ingress": "insulation", "fast_fade": "state_of_health"}
 
 
 def train_local(data_dir):
@@ -72,7 +72,7 @@ def run_demo_fleet(booster, seed):
 
 def main():
     booster = train_local(ROOT / "ml" / ".data")
-    faulty = {(vid, FAULT_COMPONENT[f]) for vid, (f, _) in FAULTS.items()} | {("EV-007", "inverter_thermal")}
+    faulty = {(vid, FAULT_COMPONENT[f]) for vid, (f, _) in FAULTS.items()}
 
     res = run_demo_fleet(booster, 42)
     print("\nDemo fleet (seed 42)            trend warns  model warns  limit day")
@@ -89,7 +89,7 @@ def main():
             for src in ("trend", "model"):
                 if key not in faulty and rec[src] is not None:
                     totals[src][0] += 1
-                if key in faulty and key[1] != "inverter_thermal":
+                if key in faulty:
                     if rec[src] is None or (rec["limit"] is not None and rec["limit"] - rec[src] < 14):
                         totals[src][1] += 1
                     elif rec["limit"] is not None:

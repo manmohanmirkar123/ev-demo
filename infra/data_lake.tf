@@ -89,24 +89,12 @@ resource "aws_glue_catalog_table" "telemetry" {
       type = "double"
     }
     columns {
-      name = "motor"
-      type = "struct<temp_c:double,vibration_g:double,rpm:int>"
+      name = "battery"
+      type = "struct<soc_pct:double,soh_pct:double,pack_voltage_v:double,cell_v_max:double,cell_v_min:double,cell_temp_max_c:double,coolant_temp_c:double,insulation_kohm:double>"
     }
     columns {
-      name = "inverter"
-      type = "struct<temp_c:double>"
-    }
-    columns {
-      name = "cooling"
-      type = "struct<coolant_temp_c:double,pump_flow_lpm:double>"
-    }
-    columns {
-      name = "brakes"
-      type = "struct<pad_mm_front:double,pad_mm_rear:double>"
-    }
-    columns {
-      name = "tyres"
-      type = "struct<fl:double,fr:double,rl:double,rr:double>"
+      name = "charging"
+      type = "struct<dc_fast_sessions:int,energy_kwh:double>"
     }
     columns {
       name = "dtc"

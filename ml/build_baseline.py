@@ -15,14 +15,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 QUERY = """
 SELECT
-  avg(motor.vibration_g)                         AS motor_bearing_mean,
-  stddev(motor.vibration_g)                      AS motor_bearing_std,
-  avg(inverter.temp_c - cooling.coolant_temp_c)  AS inverter_thermal_mean,
-  stddev(inverter.temp_c - cooling.coolant_temp_c) AS inverter_thermal_std,
-  avg(cooling.pump_flow_lpm)                     AS coolant_pump_mean,
-  stddev(cooling.pump_flow_lpm)                  AS coolant_pump_std,
-  avg(least(tyres.fl, tyres.fr, tyres.rl, tyres.rr))    AS tyres_mean,
-  stddev(least(tyres.fl, tyres.fr, tyres.rl, tyres.rr)) AS tyres_std,
+  avg((battery.cell_v_max - battery.cell_v_min) * 1000)      AS cell_imbalance_mean,
+  stddev((battery.cell_v_max - battery.cell_v_min) * 1000)   AS cell_imbalance_std,
+  avg(battery.cell_temp_max_c - battery.coolant_temp_c)      AS pack_cooling_mean,
+  stddev(battery.cell_temp_max_c - battery.coolant_temp_c)   AS pack_cooling_std,
+  avg(battery.insulation_kohm)                               AS insulation_mean,
+  stddev(battery.insulation_kohm)                            AS insulation_std,
   count(*) AS samples
 FROM telemetry
 WHERE sim_day < {days}
@@ -62,7 +60,7 @@ def main():
 
     baseline = {
         comp: {"mean": round(float(row[f"{comp}_mean"]), 4), "std": round(float(row[f"{comp}_std"]), 4)}
-        for comp in ("motor_bearing", "inverter_thermal", "coolant_pump", "tyres")
+        for comp in ("cell_imbalance", "pack_cooling", "insulation")
     }
     session.client("s3").put_object(
         Bucket=cfg["lake_bucket"], Key="baseline/baseline.json",

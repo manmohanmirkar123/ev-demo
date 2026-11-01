@@ -1,7 +1,8 @@
-# EV predictive maintenance — beyond the battery (AWS PoC)
+# EV battery predictive maintenance (AWS PoC)
 
-Predicts failures in the **motor bearing, coolant pump, inverter cooling, brake pads and tyres** of a connected EV fleet
-and opens a service work order **weeks before** the vehicle's own fault code (DTC) would fire.
+Predicts **high-voltage battery** faults across a connected EV fleet: a weak cell, a failing pack cooling plate,
+moisture getting into the pack, and fast capacity fade. It opens a service work order **weeks before** the battery
+management system's own fault code (DTC) would fire.
 
 No hardware: a Python simulator stands in for 20 vehicles and plays 120 days of fleet life in about 2 minutes.
 Everything else is real AWS, deployed with Terraform and sized for short-lived cloud sandboxes.
@@ -29,11 +30,12 @@ The dashboard banner always shows which mode is active.
 
 ## Architecture
 
-![EV predictive maintenance architecture](docs/architecture.svg)
+![EV battery predictive maintenance architecture](docs/architecture.svg)
 
 1. **Ingest:** the simulator publishes one message per vehicle per simulated day to **IoT Core** over MQTT/TLS.
+   Each message is a day's battery management system (BMS) summary: cell voltages, temperatures, insulation resistance, state of health.
    A topic rule sends each message to the **Lambda scorer** and to **Firehose**.
-2. **Score:** the Lambda updates each part's 30-day history and status in **DynamoDB**, which the dashboard reads.
+2. **Score:** the Lambda updates each battery indicator's 30-day history and status in **DynamoDB**, which the dashboard reads.
 3. **Act:** when a part gets worse (HEALTHY → AT_RISK → CRITICAL), the Lambda sends an **EventBridge** event.
    **Step Functions** then sets the priority, writes a work order to DynamoDB and emails an alert through **SNS**.
 4. **Data lake:** Firehose lands raw telemetry in **S3**, queryable with **Glue + Athena**.
@@ -43,24 +45,23 @@ The dashboard banner always shows which mode is active.
 
 ## How the scoring works
 
-For each component, the Lambda keeps a 30-day window of one health indicator per vehicle.
+For each battery health indicator, the Lambda keeps a 30-day window per vehicle.
 
-| Component | Indicator | Limit |
-|---|---|---|
-| Motor bearing | vibration RMS (g) | 1.2 g |
-| Coolant pump | coolant flow (L/min) | 6 L/min |
-| Inverter cooling | inverter temp − coolant temp (°C) | 35 °C |
-| Brake pads | thinnest pad (mm) | 3 mm |
-| Tyres | lowest pressure (psi) | 30 psi |
+| Indicator | Measured as | Limit | Injected fault (demo vehicle) | BMS DTC at the limit |
+|---|---|---|---|---|
+| Cell voltage imbalance | highest − lowest cell voltage (mV) | 50 mV | weak cell, growing faster over time (EV-003) | `BMS_CELL_IMBALANCE` |
+| Pack cooling | hottest cell − coolant temp (°C) | 15 °C | clogging cooling plate (EV-007) | `BMS_PACK_OVERTEMP` |
+| HV insulation | pack-to-chassis isolation resistance (kΩ) | 500 kΩ | moisture ingress (EV-011) | `BMS_ISOLATION_FAULT` |
+| State of health | usable capacity vs. new (%) | 80 % (typical warranty limit) | fast fade from heavy DC fast charging (EV-015) | `BMS_SOH_LOW` |
 
 1. **Anomaly gate — is this part degrading?** A z-score against the healthy-fleet baseline.
    z ≥ 4 → AT_RISK on its own. Below z = 2, no days-to-limit estimate is trusted, from either the model or the trend.
-   This keeps healthy vehicles quiet. Brake pads wear by design, so they skip the gate.
+   This keeps healthy vehicles quiet. Every pack loses capacity as it ages, so state of health skips the gate.
 2. **Days to limit — how soon?**
    - **SageMaker model** (when published): XGBoost regression trained on run-to-failure history.
      It uses 12 features (`lambda/scorer/health.py: features()`): margin to limit, 15-day and 5-day slope,
      acceleration, noise, z-score, linear-trend estimate and component type.
-     It learns things a straight line can't, such as the accelerating wear of a failing bearing.
+     It learns things a straight line can't, such as the accelerating voltage spread of a weak cell.
    - **Linear trend** (fallback): least squares over the last 15 days, extrapolated to the limit.
    - ≤ 45 days → AT_RISK, ≤ 14 days or past the limit → CRITICAL.
 3. One work order per escalation (HEALTHY → AT_RISK → CRITICAL), not one per message.
@@ -76,14 +77,14 @@ In a real OEM these labels come from repair and warranty records joined to telem
 
 | Demo fleet fault | Trend warns | Model warns | Limit reached |
 |---|---|---|---|
-| EV-015 aggressive braking | day 18 | **day 12** | day 44 |
-| EV-007 coolant pump | day 40 | **day 29** | day 89 |
-| EV-011 slow tyre leak | day 40 | **day 34** | day 68 |
-| EV-003 motor bearing | day 44 | day 44 | day 90 |
+| EV-015 fast capacity fade | day 19 | **day 12** | day 54 |
+| EV-007 pack cooling plate | day 34 | **day 30** | day 86 |
+| EV-011 moisture ingress | day 36 | day 36 | day 90 |
+| EV-003 weak cell | day 49 | **day 39** | day 98 |
 
-Across 20 different simulated fleets (320 healthy vehicles, 80 faults): the model gives **~44 days** average warning
-vs ~41 for the trend, misses nothing, and raises **1 false alarm** vs 0. Validation MAE is ~13 days overall and ~15 days
-for parts failing within 60 days. It's an honest trade-off to present: earlier warnings, slightly more noise.
+Across 20 different simulated fleets (320 healthy vehicles, 80 faults): the model gives **~52 days** average warning
+vs ~48 for the trend. Neither misses a fault or raises a false alarm. Validation MAE is ~13 days overall and ~14 days
+for indicators reaching the limit within 60 days. The model's gain is biggest on faults that speed up, like the weak cell.
 
 ## Run it
 
@@ -192,17 +193,22 @@ make destroy                      # fleet account; the ML sandbox is wiped when 
 1. **Two accounts** (30 s): "Fleet operations here; ML training there. The model is a versioned artifact, so the teams and accounts stay separate."
 2. **SageMaker console, ML account**: open the training job. Show the hyperparameters, the instance, the `validation:mae` metric, and the model artifact in S3.
 3. **Dashboard, day 0–10.** The green banner names the training job. "20 vehicles over MQTT into IoT Core, scored as each message arrives."
-4. **Day ~12: EV-015 brake pads turn amber.** "Pads are still over 5 mm, so no DTC. The model says this driver hits the limit in about 39 days." Show the work order and the SNS email.
-5. **Day ~29: EV-007 coolant pump.** Open its trend chart. "The model flags it 11 days before a straight-line trend would, and about 60 days before the vehicle's own coolant DTC." The *model* and *trend* columns show both estimates side by side.
-6. **Step Functions console**: Prioritise → CreateWorkOrder → Notify.
-7. **Athena**: the raw data in the lake, which is what the next model gets retrained on.
-8. **Simulator terminal**: the DTCs finally fire on days 44, 68, 89 and 90.
+4. **Day ~12: EV-015 state of health turns amber.** "SoH is still 90%, well above the 80% warranty limit, so no DTC. But it's falling fast: this pack sees two DC fast charges a day." Show the work order and the SNS email.
+5. **Day ~30: EV-007 pack cooling.** "Cells run hotter than the coolant every day. Catch a clogged cooling plate now, before it becomes thermal stress on the cells."
+6. **Day ~39: EV-003 weak cell.** Open its trend chart. "The spread is under 20 mV against a 50 mV limit, but it's accelerating. The model flags it 10 days before a straight-line trend would, and about 59 days before the BMS fault code." The *model* and *trend* columns show both estimates side by side.
+7. **Step Functions console**: Prioritise → CreateWorkOrder → Notify.
+8. **Athena**: the raw data in the lake, which is what the next model gets retrained on.
+9. **Simulator terminal**: the BMS DTCs finally fire on days 54, 86, 90 and 98.
 
 ### Athena queries
 ```sql
--- fleet coolant-flow trend
-SELECT sim_day, vehicle_id, cooling.pump_flow_lpm
-FROM telemetry WHERE vehicle_id IN ('EV-007', 'EV-001') ORDER BY sim_day;
+-- weak cell vs. a healthy pack: cell voltage spread in mV
+SELECT sim_day, vehicle_id, round((battery.cell_v_max - battery.cell_v_min) * 1000, 1) AS spread_mv
+FROM telemetry WHERE vehicle_id IN ('EV-003', 'EV-001') ORDER BY sim_day;
+
+-- does heavy DC fast charging go with low state of health?
+SELECT vehicle_id, sum(charging.dc_fast_sessions) AS dc_fast, min(battery.soh_pct) AS soh
+FROM telemetry GROUP BY 1 ORDER BY 2 DESC;
 
 -- when did each DTC first appear?
 SELECT vehicle_id, d AS dtc, min(sim_day) AS first_day
@@ -226,7 +232,7 @@ FROM telemetry CROSS JOIN UNNEST(dtc) AS t(d) GROUP BY 1, 2 ORDER BY 3;
 | PoC | Production path |
 |---|---|
 | Python simulator, one cert for the whole fleet | One identity per vehicle via the TCU; fleet provisioning; edge signal collection |
-| One summarised message per vehicle per simulated day | Higher-rate signals aggregated at the edge or in a stream processor (Kinesis / Managed Flink) |
+| One summarised BMS message per vehicle per simulated day | Higher-rate signals aggregated at the edge or in a stream processor (Kinesis / Managed Flink) |
 | Labels from simulated run-to-failure history | Labels from repair, warranty and parts-replacement records joined to telemetry |
 | Model copied between accounts from a laptop | SageMaker Model Registry + pipeline, cross-account deployment, scheduled retraining from the lake |
 | Model runs inside the Lambda | Same for small tree models; a SageMaker endpoint for larger models or for retraining without redeploying |

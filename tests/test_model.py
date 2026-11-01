@@ -43,11 +43,11 @@ def test_entry_point_model_matches_xgboost(tmp_path):
 
 
 def test_model_rul_needs_visible_deviation():
-    # Healthy-looking tyre (z < 2): a short model RUL alone must not raise an alarm.
-    healthy = [(d, 36.0 + (0.1 if d % 2 else -0.1)) for d in range(15)]
-    assert score("tyres", healthy, model_rul=10.0)["status"] == "HEALTHY"
-    # Brake pads wear by design, so the model RUL applies without the anomaly gate.
-    pads = [(d, 4.0 - 0.05 * d) for d in range(15)]
-    assert score("brake_pads", pads, model_rul=10.0)["status"] == "CRITICAL"
+    # Healthy-looking insulation (z < 2): a short model RUL alone must not raise an alarm.
+    healthy = [(d, 3000.0 + (50 if d % 2 else -50)) for d in range(15)]
+    assert score("insulation", healthy, model_rul=10.0)["status"] == "HEALTHY"
+    # Every pack ages, so state of health skips the anomaly gate and the model RUL applies directly.
+    soh = [(d, 84.0 - 0.2 * d) for d in range(15)]
+    assert score("state_of_health", soh, model_rul=10.0)["status"] == "CRITICAL"
     # Model "nothing within the horizon" leaves the part healthy.
-    assert score("brake_pads", [(d, 9.0) for d in range(15)], model_rul=119.0)["status"] == "HEALTHY"
+    assert score("state_of_health", [(d, 95.0) for d in range(15)], model_rul=119.0)["status"] == "HEALTHY"

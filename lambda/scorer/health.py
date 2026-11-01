@@ -4,18 +4,16 @@ Pure Python (no third-party deps) so the same code runs in Lambda, the tests and
 """
 
 # bad: which direction is degradation. wear: the indicator declines for every vehicle by design
-# (e.g. brake pads), so deviation from the fleet mean is not an anomaly — only RUL matters.
+# (every pack loses capacity as it ages), so deviation from the fleet mean is not an anomaly — only RUL matters.
 COMPONENTS = {
-    "motor_bearing": {"label": "Motor bearing", "unit": "g RMS", "bad": "up", "threshold": 1.2,
-                      "mean": 0.30, "std": 0.04, "wear": False},
-    "inverter_thermal": {"label": "Inverter cooling", "unit": "°C over coolant", "bad": "up", "threshold": 35.0,
-                         "mean": 15.0, "std": 1.0, "wear": False},
-    "coolant_pump": {"label": "Coolant pump", "unit": "L/min", "bad": "down", "threshold": 6.0,
-                     "mean": 12.0, "std": 0.4, "wear": False},
-    "brake_pads": {"label": "Brake pads", "unit": "mm (thinnest)", "bad": "down", "threshold": 3.0,
-                   "mean": None, "std": None, "wear": True},
-    "tyres": {"label": "Tyres", "unit": "psi (lowest)", "bad": "down", "threshold": 30.0,
-              "mean": 36.0, "std": 0.5, "wear": False},
+    "cell_imbalance": {"label": "Cell voltage imbalance", "unit": "mV (max − min cell)", "bad": "up",
+                       "threshold": 50.0, "mean": 15.0, "std": 1.5, "wear": False},
+    "pack_cooling": {"label": "Pack cooling", "unit": "°C cell over coolant", "bad": "up", "threshold": 15.0,
+                     "mean": 6.0, "std": 0.5, "wear": False},
+    "insulation": {"label": "HV insulation", "unit": "kΩ", "bad": "down", "threshold": 500.0,
+                   "mean": 3000.0, "std": 90.0, "wear": False},
+    "state_of_health": {"label": "State of health", "unit": "% SoH", "bad": "down", "threshold": 80.0,
+                        "mean": None, "std": None, "wear": True},
 }
 
 SEVERITY = {"HEALTHY": 0, "AT_RISK": 1, "CRITICAL": 2}
@@ -31,21 +29,19 @@ RUL_CRITICAL = 14.0
 
 def extract(msg):
     """Telemetry message -> {component: health indicator value}."""
-    tyres = msg["tyres"]
-    brakes = msg["brakes"]
+    b = msg["battery"]
     return {
-        "motor_bearing": msg["motor"]["vibration_g"],
-        "inverter_thermal": msg["inverter"]["temp_c"] - msg["cooling"]["coolant_temp_c"],
-        "coolant_pump": msg["cooling"]["pump_flow_lpm"],
-        "brake_pads": min(brakes["pad_mm_front"], brakes["pad_mm_rear"]),
-        "tyres": min(tyres["fl"], tyres["fr"], tyres["rl"], tyres["rr"]),
+        "cell_imbalance": round((b["cell_v_max"] - b["cell_v_min"]) * 1000, 1),
+        "pack_cooling": round(b["cell_temp_max_c"] - b["coolant_temp_c"], 1),
+        "insulation": b["insulation_kohm"],
+        "state_of_health": b["soh_pct"],
     }
 
 
 # ---------- ML features (shared by ml/ training and the Lambda, so they can't drift apart) ----------
 
 # Typical healthy-to-limit distance per component; puts every component's features on one scale.
-SCALE = {"motor_bearing": 0.9, "inverter_thermal": 20.0, "coolant_pump": 6.0, "brake_pads": 9.0, "tyres": 6.0}
+SCALE = {"cell_imbalance": 35.0, "pack_cooling": 9.0, "insulation": 2500.0, "state_of_health": 15.0}
 RUL_CAP = 120.0  # model horizon in days: "120" means "not within the next 120 days"
 FEATURES = [f"is_{c}" for c in COMPONENTS] + [
     "margin", "slope_15", "slope_5", "accel", "noise", "z", "trend_rul",

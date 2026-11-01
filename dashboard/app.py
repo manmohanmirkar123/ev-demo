@@ -40,8 +40,8 @@ def scan(table):
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
 
-st.set_page_config(page_title="EV Predictive Maintenance", layout="wide")
-st.title("EV fleet — predictive maintenance")
+st.set_page_config(page_title="EV Battery Predictive Maintenance", layout="wide")
+st.title("EV fleet — battery predictive maintenance")
 st.caption("Simulated fleet → AWS IoT Core → Lambda scorer → DynamoDB · risk events → Step Functions work orders")
 
 

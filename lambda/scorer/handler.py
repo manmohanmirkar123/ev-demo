@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import boto3
 
-from health import COMPONENTS, RUL_CAP, SEVERITY, extract, features, score
+from health import COMPONENTS, FEATURES, RUL_CAP, SEVERITY, extract, features, score
 from tree_model import TreeModel
 
 HEALTH_TABLE = os.environ["HEALTH_TABLE"]
@@ -45,7 +45,9 @@ def baseline():
 
 def model():
     """XGBoost days-to-limit model trained on SageMaker (ml/train_sagemaker.py); None -> linear trend."""
-    return artifact(MODEL_KEY, TreeModel)
+    m = artifact(MODEL_KEY, TreeModel)
+    # A model trained on a different feature set (e.g. before the components changed) can't be used.
+    return m if m is not None and m.num_features == len(FEATURES) else None
 
 
 def to_ddb(obj):

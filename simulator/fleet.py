@@ -1,6 +1,6 @@
-"""Synthetic EV fleet. Each call to telemetry(day) returns one day's summarised telemetry for a vehicle.
+"""Synthetic EV fleet. Each call to telemetry(day) returns one day's summarised battery (BMS) telemetry for a vehicle.
 
-Four vehicles carry an injected fault so the demo has something to find; the rest stay healthy.
+Four vehicles carry an injected battery fault so the demo has something to find; the rest stay healthy.
 """
 import math
 import random
@@ -8,14 +8,15 @@ from datetime import datetime, timezone
 
 # vehicle_id -> (fault, first day the fault starts developing)
 FAULTS = {
-    "EV-003": ("motor_bearing", 20),       # bearing wear: vibration grows exponentially
-    "EV-007": ("coolant_pump", 15),        # pump degrading: flow falls, inverter runs hotter
-    "EV-011": ("tyre_leak", 30),           # slow puncture front-left
-    "EV-015": ("aggressive_braking", 10),  # driver change: pads wear ~8x faster
+    "EV-003": ("weak_cell", 20),        # one cell's internal resistance rising: cell voltage spread grows
+    "EV-007": ("cooling_plate", 15),    # pack cooling plate clogging: cells run hotter than the coolant
+    "EV-011": ("moisture_ingress", 30), # water getting into the pack: HV insulation resistance falls
+    "EV-015": ("fast_fade", 10),        # heavy DC fast charging in heat: state of health drops quickly
 }
 
 
-FAULT_TYPES = ("motor_bearing", "coolant_pump", "tyre_leak", "aggressive_braking")
+FAULT_TYPES = ("weak_cell", "cooling_plate", "moisture_ingress", "fast_fade")
+CELLS_IN_SERIES = 96
 
 
 class Vehicle:
@@ -27,9 +28,8 @@ class Vehicle:
         self.severity = severity
         self.odometer_km = self.rng.uniform(5_000, 40_000)
         self.daily_km = self.rng.uniform(35, 80)
-        self.pad_front = self.rng.uniform(7.0, 11.0)
-        self.pad_rear = self.pad_front + self.rng.uniform(0.5, 1.5)
-        self.tyre_base = {t: self.rng.uniform(35.5, 36.5) for t in ("fl", "fr", "rl", "rr")}
+        self.soh = self.rng.uniform(90.0, 97.0)       # packs in the fleet are of different ages
+        self.insulation_base = self.rng.uniform(2900, 3100)
 
     def _active(self, fault, day):
         return self.fault == fault and day >= self.fault_day
@@ -41,37 +41,35 @@ class Vehicle:
         t = day - self.fault_day
         s = self.severity
 
-        vibration = g(0.30, 0.03)
-        if self._active("motor_bearing", day):
-            vibration += 0.30 * (math.exp(0.02 * s * t) - 1)
+        spread_mv = g(15.0, 1.2)
+        if self._active("weak_cell", day):
+            spread_mv += 6.0 * (math.exp(0.025 * s * t) - 1)
+        cell_v_min = g(3.70, 0.02)
+        cell_v_max = cell_v_min + spread_mv / 1000
 
-        flow = g(12.0, 0.3)
-        if self._active("coolant_pump", day):
-            flow -= 0.08 * s * t
-        flow = max(flow, 0.5)
+        coolant = g(28.0, 1.5)
+        cell_over_coolant = g(6.0, 0.4)
+        if self._active("cooling_plate", day):
+            cell_over_coolant += 0.12 * s * t
 
-        coolant = g(35.0, 1.5) + max(0.0, 12.0 - flow) * 1.2
-        inverter = coolant + g(15.0, 0.8) + max(0.0, 12.0 - flow) * 2.0
-        motor_temp = g(65.0, 3.0) + max(0.0, vibration - 0.3) * 10
+        insulation = self.insulation_base * g(1.0, 0.025)
+        if self._active("moisture_ingress", day):
+            insulation *= math.exp(-0.03 * s * t)
 
-        pad_rate = 0.0016 * s if self._active("aggressive_braking", day) else 0.0002  # mm per km
-        self.pad_front = max(0.5, self.pad_front - pad_rate * km)
-        self.pad_rear = max(0.5, self.pad_rear - pad_rate * 0.6 * km)
-
-        tyres = {k: g(base, 0.3) for k, base in self.tyre_base.items()}
-        if self._active("tyre_leak", day):
-            tyres["fl"] -= 0.15 * s * t
+        fading = self._active("fast_fade", day)
+        self.soh -= (0.25 * s if fading else 0.004) * max(0.0, g(1.0, 0.2))
+        dc_fast = sum(self.rng.random() < (0.8 if fading else 0.15) for _ in range(2))
 
         # DTCs only fire once a limit is crossed — the point of the demo is to warn well before this.
         dtc = []
-        if vibration > 1.2:
-            dtc.append("MOTOR_VIBRATION_HIGH")
-        if flow < 6.0:
-            dtc.append("COOLANT_FLOW_LOW")
-        if min(self.pad_front, self.pad_rear) < 3.0:
-            dtc.append("BRAKE_PAD_WEAR_LIMIT")
-        if min(tyres.values()) < 30.0:
-            dtc.append("TYRE_PRESSURE_LOW")
+        if spread_mv > 50:
+            dtc.append("BMS_CELL_IMBALANCE")
+        if cell_over_coolant > 15:
+            dtc.append("BMS_PACK_OVERTEMP")
+        if insulation < 500:
+            dtc.append("BMS_ISOLATION_FAULT")
+        if self.soh < 80:
+            dtc.append("BMS_SOH_LOW")
 
         r = lambda x, n=2: round(x, n)
         return {
@@ -79,11 +77,17 @@ class Vehicle:
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "sim_day": day,
             "odometer_km": r(self.odometer_km, 1),
-            "motor": {"temp_c": r(motor_temp, 1), "vibration_g": r(vibration, 3), "rpm": int(g(4200, 300))},
-            "inverter": {"temp_c": r(inverter, 1)},
-            "cooling": {"coolant_temp_c": r(coolant, 1), "pump_flow_lpm": r(flow)},
-            "brakes": {"pad_mm_front": r(self.pad_front, 3), "pad_mm_rear": r(self.pad_rear, 3)},
-            "tyres": {k: r(v) for k, v in tyres.items()},
+            "battery": {
+                "soc_pct": r(self.rng.uniform(20, 95), 1),
+                "soh_pct": r(self.soh + g(0, 0.1)),
+                "pack_voltage_v": r((cell_v_min + cell_v_max) / 2 * CELLS_IN_SERIES, 1),
+                "cell_v_max": r(cell_v_max, 4),
+                "cell_v_min": r(cell_v_min, 4),
+                "cell_temp_max_c": r(coolant + cell_over_coolant, 1),
+                "coolant_temp_c": r(coolant, 1),
+                "insulation_kohm": r(insulation, 0),
+            },
+            "charging": {"dc_fast_sessions": dc_fast, "energy_kwh": r(km * g(0.17, 0.01), 1)},
             "dtc": dtc,
         }
 

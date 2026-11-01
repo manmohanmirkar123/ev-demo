@@ -14,10 +14,10 @@ from health import COMPONENTS, extract, score  # noqa: E402
 DAYS = 120
 WINDOW = 30
 FAULT_COMPONENT = {
-    "motor_bearing": "motor_bearing",
-    "coolant_pump": "coolant_pump",
-    "tyre_leak": "tyres",
-    "aggressive_braking": "brake_pads",
+    "weak_cell": "cell_imbalance",
+    "cooling_plate": "pack_cooling",
+    "moisture_ingress": "insulation",
+    "fast_fade": "state_of_health",
 }
 
 
@@ -55,8 +55,6 @@ def test_every_fault_is_warned_before_threshold():
 
 def test_no_false_alarms_on_healthy_parts():
     faulty = {(vid, FAULT_COMPONENT[f]) for vid, (f, _) in FAULTS.items()}
-    # A failing coolant pump legitimately heats the inverter too.
-    faulty.add(("EV-007", "inverter_thermal"))
     false_alarms = [k for k, rec in RESULTS.items() if k not in faulty and rec["first_warning"] is not None]
     assert not false_alarms, f"false alarms: {false_alarms}"
 
